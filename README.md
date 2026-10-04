@@ -5,7 +5,7 @@ Use this loader in the game console:
 ```js
 (async () => {
   try {
-    const url = "https://raw.githubusercontent.com/seledoz/mintest3/main/pz-bot.js?t=" + Date.now() + "-" + Math.random();
+    const url = "https://raw.githubusercontent.com/seledoz/mintest4/main/pz-bot.js?t=" + Date.now() + "-" + Math.random();
     console.log("[minibia-bot] Fetching pz-bot.js:", url);
 
     const response = await fetch(url, { cache: "no-store" });
@@ -37,7 +37,7 @@ Use a fine-grained GitHub token with read and write access to the repository con
   const token = prompt("Paste your GitHub token:")?.trim();
   if (!token) return;
 
-  const repository = "seledoz/mintest3";
+  const repository = "seledoz/mintest4";
   const ref = "main";
   const rawPrefix = `https://raw.githubusercontent.com/${repository}/${ref}/`;
   const apiPrefix = `https://api.github.com/repos/${repository}/contents`;
@@ -107,7 +107,7 @@ Use a fine-grained GitHub token with read and write access to the repository con
   const token = prompt("Paste your GitHub token:")?.trim();
   if (!token) return;
 
-  const repository = "seledoz/mintest3";
+  const repository = "seledoz/mintest4";
   const ref = "main";
   const rawPrefix = `https://raw.githubusercontent.com/${repository}/${ref}/`;
   const apiPrefix = `https://api.github.com/repos/${repository}/contents`;
@@ -126,7 +126,7 @@ Use a fine-grained GitHub token with read and write access to the repository con
     return `${apiPrefix}/${path}?ref=${encodeURIComponent(ref)}&t=${Date.now()}`;
   }
 
-  // Authenticate mintest3 GitHub requests.
+  // Authenticate mintest4 GitHub requests.
   window.fetch = function authenticatedPrivateRepoFetch(input, init = {}) {
     const url = typeof input === "string" ? input : input?.url;
     if (!url) return originalFetch(input, init);
