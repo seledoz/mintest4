@@ -117,9 +117,15 @@
       const tile = getTile(position);
       if (!tile) throw new Error("Native tile unavailable at current position");
 
-      const nativeWalkable = typeof tile.isWalkable === "function"
-        ? (() => { try { return !!tile.isWalkable(); } catch (_) { return null; } })()
-        : null;
+      const prototype = Object.getPrototypeOf(tile);
+      const walkableFn = prototype?.isWalkable;
+      const caveWrapperPresent = !!walkableFn?.__caveBotWalkOverFieldsApplied;
+      const originalWalkableFn = walkableFn?.__caveBotWalkOverFieldsOriginal;
+      const nativeWalkable = typeof originalWalkableFn === "function"
+        ? (() => { try { return !!originalWalkableFn.call(tile); } catch (_) { return null; } })()
+        : typeof tile.isWalkable === "function"
+          ? (() => { try { return !!tile.isWalkable(); } catch (_) { return null; } })()
+          : null;
 
       const things = getTileThings(tile).map(getThingInfo);
       const standOn = findStandOnTest(position);
@@ -127,6 +133,7 @@
         scannedAt: new Date().toISOString(),
         position,
         nativeTileIsWalkable: nativeWalkable,
+        caveBotWalkabilityWrapperPresent: caveWrapperPresent,
         nativeStandOnExactSquare: standOn.found,
         standOnCandidates: standOn.candidates.map(({ from, ok, available, resultType, resultLength, error }) =>
           ({ from, ok, available, resultType, resultLength, error: error || null })),
@@ -142,7 +149,8 @@
       if (!result) return "No scan yet.";
       const lines = [
         `Tile: ${result.position.x}, ${result.position.y}, ${result.position.z}`,
-        `Native tile.isWalkable(): ${result.nativeTileIsWalkable === null ? "unavailable" : result.nativeTileIsWalkable ? "YES" : "NO"}`,
+        `Original/native tile walkability: ${result.nativeTileIsWalkable === null ? "unavailable" : result.nativeTileIsWalkable ? "YES" : "NO"}`,
+        `CaveBot walkability wrapper present: ${result.caveBotWalkabilityWrapperPresent ? "YES" : "NO"}`,
         `Native path to exact square: ${result.nativeStandOnExactSquare ? "YES" : "NO"}`,
         "",
         "Things on tile:"
