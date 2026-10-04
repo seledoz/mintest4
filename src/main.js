@@ -401,6 +401,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
     currentBundle.installPanel(bot);
     currentBundle.installCaveWaypointActionsModule?.(bot);
     currentBundle.installFireFieldTileScannerModule?.(bot);
+    currentBundle.installNativeFieldDiagnosticModule?.(bot);
 
     bot.ui.inject();
     bot.spellTimer?.ensureUi?.();
@@ -511,6 +512,7 @@ if(window.minibiaBot) window.__minibiaBotBundle.installPlayerManaPotionModule(wi
       mining: bot.mining?.status?.() || null,
       eat: bot.eat.status(),
       playerManaPotion: bot.playerManaPotion?.status?.() || null,
+      nativeFieldDiagnostic: bot.nativeFieldDiagnostic?.status?.() || null,
       talk: bot.talk.status(),
       runeMakerDrop: bot.runeMakerDrop?.status?.() || null,
       maxLight: bot.maxLight?.status?.() || null,
