@@ -17,7 +17,7 @@
     if (window.__minibiaLoaderRuntime) window.__minibiaLoaderRuntime.bot = null;
   };
 
-  const repository = "seledoz/mintest3";
+  const repository = "seledoz/mintest4";
   const ref = "main";
   const rawBaseUrl = `https://raw.githubusercontent.com/${repository}/${ref}`;
   const sourceFiles = [
@@ -72,6 +72,7 @@
     "src/modules/remove-legacy-great-fireball.js",
     "src/modules/anti-paralyze-toggle-fix.js",
     "src/modules/player-mana-potion.js",
+    "src/modules/native-field-diagnostic.js",
     "src/modules/spell-timer.js",
     "src/modules/player-screen-alert.js",
     "src/modules/monster-xray-alarm.js",
