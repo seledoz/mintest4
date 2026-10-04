@@ -17,9 +17,9 @@
     if (window.__minibiaLoaderRuntime) window.__minibiaLoaderRuntime.bot = null;
   };
 
-  const repository = "seledoz/mintest3";
+  const repository = "seledoz/mintest4";
   // Pin the runtime to the exact commit so a stale CDN/browser response cannot mix old module code with the current loader.
-  const ref = "8ccbb9078bbc7d10367681071bf96d98cd9426ab";
+  const ref = "778b4a0ba73bb9e84ea5666a026d0c61ef997ed1";
   const rawBaseUrl = `https://raw.githubusercontent.com/${repository}/${ref}`;
   const sourceFiles = [
     "src/version.js",
@@ -265,7 +265,7 @@
     let evaluationError=evaluate(code);
     if(evaluationError&&code!==rawCode){console.warn(`[minibia-bot] ${path} transformed source failed; retrying original source`,evaluationError);evaluationError=evaluate(rawCode);}
     if(evaluationError&&path==="src/modules/cave-waypoint-actions.js"){
-      const fallbackUrl="https://raw.githubusercontent.com/seledoz/mintest3/2f0938a7c745bd819fa22aa008d50628a2472e49/src/modules/cave-waypoint-actions.js";
+      const fallbackUrl="https://raw.githubusercontent.com/seledoz/mintest4/778b4a0ba73bb9e84ea5666a026d0c61ef997ed1/src/modules/cave-waypoint-actions.js";
       console.warn("[minibia-bot] Cave waypoint actions failed from main; loading known-good fallback commit",fallbackUrl,evaluationError);
       const fallbackResponse=await fetch(`${fallbackUrl}?t=${Date.now()}-${Math.random()}`,{cache:"no-store"});
       if(!fallbackResponse.ok)throw evaluationError;
