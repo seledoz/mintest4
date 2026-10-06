@@ -411,8 +411,15 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   function install() {
     const bot = window.minibiaBot;
     if (!bot?.cave) return false;
-    patchAllLoadedTiles(bot);
-    installPathfinderGuard(bot);
+
+    patchFieldDefinitions(bot);
+    const prototypePatched = patchPrototype(bot);
+    const guardInstalled = installPathfinderGuard(bot);
+
+    // Do not stop the startup retry loop until the Tile prototype is actually
+    // patched. CaveBot can exist before map/pathfinder Tile instances exist.
+    if (!prototypePatched || !guardInstalled) return false;
+
     state.installed = true;
     return true;
   }
