@@ -343,46 +343,6 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       }
     }
 
-    // Some client builds expose a Tile prototype method that can be replaced
-    // or rebound by pathfinding initialization. To make the native path request
-    // deterministic, also patch the exact Tile nodes participating in this
-    // request (from/to and their immediate neighbors). This is not a map scan.
-    const requestTiles = new Set();
-    const addRequestTile = (candidate) => {
-      if (!candidate || typeof candidate.isNotPathable !== "function") return;
-      requestTiles.add(candidate);
-      for (const neighbor of candidate.neighbours || []) {
-        if (neighbor && typeof neighbor.isNotPathable === "function") {
-          requestTiles.add(neighbor);
-        }
-      }
-    };
-    addRequestTile(from);
-    addRequestTile(to);
-
-    for (const candidate of requestTiles) {
-      const original = candidate.isNotPathable;
-      if (original.__globalCaveFieldNativePathabilityInstance) continue;
-
-      const wrapper = function globalCaveFieldNativePathabilityInstance(...args) {
-        if (isAlwaysPathableFieldTile(this)) return false;
-        const status = bot.cave?.status?.();
-        if (status?.config?.walkOverFields && isFireFieldTile(this)) return false;
-        return original.apply(this, args);
-      };
-
-      wrapper.__globalCaveFieldNativePathabilityInstance = true;
-      wrapper.__globalCaveFieldNativePathabilityOriginal = original;
-
-      try {
-        Object.defineProperty(candidate, "isNotPathable", {
-          value: wrapper,
-          writable: true,
-          configurable: true,
-        });
-      } catch (_) {}
-    }
-
     // Keep the existing walkability patches for CaveBot's other pathing
     // checks. The critical native Pathfinder.search() check above is separate.
     const predicates = [
