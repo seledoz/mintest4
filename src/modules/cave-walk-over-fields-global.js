@@ -242,6 +242,40 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const prototype = tile && Object.getPrototypeOf(tile);
     if (!prototype) return false;
 
+    // Field items themselves carry DatFlagNotPathable. The native pathfinder
+    // can inspect the item collision object directly, bypassing Tile methods.
+    // Patch that prototype as well as the Tile prototype.
+    let itemPrototype = null;
+    try {
+      const items = Array.isArray(tile?.items) ? tile.items : [];
+      const fieldItem = items.find((item) => {
+        const id = Number(item?.id ?? item?.itemId ?? item?.serverId ?? item?.clientId);
+        return ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id);
+      });
+      itemPrototype = fieldItem && Object.getPrototypeOf(fieldItem);
+    } catch (_) {}
+
+    if (itemPrototype) {
+      for (const name of ["isNotPathable", "isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"]) {
+        if (typeof itemPrototype[name] !== "function" || itemPrototype[name].__globalCaveFieldWalkable) continue;
+        const original = itemPrototype[name];
+        const wrapper = function globalCaveFieldItemPassability(...args) {
+          const id = Number(this?.id ?? this?.itemId ?? this?.serverId ?? this?.clientId);
+          const field = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id);
+          const status = bot.cave?.status?.();
+          if (field && (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || status?.config?.walkOverFields)) {
+            if (name === "isNotPathable" || name === "isBlocking" || name === "blocksMovement") return false;
+            return true;
+          }
+          return original.apply(this, args);
+        };
+        wrapper.__globalCaveFieldWalkable = true;
+        wrapper.__globalCaveFieldOriginal = original;
+        try { itemPrototype[name] = wrapper; } catch (_) {}
+        patched = true;
+      }
+    }
+
     // The native pathfinder can use several collision predicates. Make field
     // tiles passable to all of them before every native path request.
     const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk", "isNotPathable"];
