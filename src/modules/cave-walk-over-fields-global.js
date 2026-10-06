@@ -233,85 +233,98 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   function patchPrototype(bot, from = null, to = null) {
     const position = bot.getPlayerPosition?.();
     if (!position) return false;
+
     let tile = null;
     try {
       tile = window.gameClient?.world?.getTileFromWorldPosition?.(
         new Position(Number(position.x), Number(position.y), Number(position.z))
       );
     } catch (_) {}
+
     const prototype = tile && Object.getPrototypeOf(tile);
     if (!prototype) return false;
 
-    // Field items themselves carry DatFlagNotPathable. The native pathfinder
-    // can inspect the item collision object directly, bypassing Tile methods.
-    // Patch that prototype as well as the Tile prototype.
-    let itemPrototype = null;
-    try {
-      const candidates = [];
-      const addTileItems = (candidate) => {
-        if (Array.isArray(candidate?.items)) candidates.push(...candidate.items);
-      };
-      addTileItems(tile);
-      if (Array.isArray(tile?.neighbours)) tile.neighbours.forEach(addTileItems);
-      for (const candidate of [from, to]) {
-        if (!candidate) continue;
-        try {
-          const candidateTile = window.gameClient?.world?.getTileFromWorldPosition?.(
-            new Position(Number(candidate.x), Number(candidate.y), Number(candidate.z))
-          );
-          addTileItems(candidateTile);
-          if (Array.isArray(candidateTile?.neighbours)) candidateTile.neighbours.forEach(addTileItems);
-        } catch (_) {}
-      }
-      const fieldItem = candidates.find((item) => {
+    // Native Pathfinder.search() explicitly rejects any intermediate tile for
+    // which Tile.isNotPathable() is true. Fire stages 2123-2125 and poison
+    // 2127 carry DatFlagNotPathable, even though CaveBot must treat them as
+    // ordinary walkable squares. Patch this exact native pathfinding predicate
+    // rather than relying only on Tile.isWalkable().
+    const isAlwaysPathableFieldTile = (candidate) => {
+      if (!candidate) return false;
+      const items = Array.isArray(candidate.items) ? candidate.items : [];
+      for (const item of items) {
         const id = Number(item?.id ?? item?.itemId ?? item?.serverId ?? item?.clientId);
-        return ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id);
-      });
-      itemPrototype = fieldItem && Object.getPrototypeOf(fieldItem);
-    } catch (_) {}
+        if (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) ||
+            ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id)) {
+          return true;
+        }
+      }
+      return false;
+    };
 
-    let patched = false;
-    if (itemPrototype) {
-      for (const name of ["isNotPathable", "isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"]) {
-        if (typeof itemPrototype[name] !== "function" || itemPrototype[name].__globalCaveFieldWalkable) continue;
-        const original = itemPrototype[name];
-        const wrapper = function globalCaveFieldItemPassability(...args) {
-          const id = Number(this?.id ?? this?.itemId ?? this?.serverId ?? this?.clientId);
-          const field = ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id);
-          const status = bot.cave?.status?.();
-          if (field && (ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || status?.config?.walkOverFields)) {
-            if (name === "isNotPathable" || name === "isBlocking" || name === "blocksMovement") return false;
-            return true;
-          }
-          return original.apply(this, args);
-        };
-        wrapper.__globalCaveFieldWalkable = true;
-        wrapper.__globalCaveFieldOriginal = original;
-        try { itemPrototype[name] = wrapper; } catch (_) {}
+    const pathabilityName = "isNotPathable";
+    const current = prototype[pathabilityName];
+    if (typeof current === "function" && !current.__globalCaveFieldNativePathability) {
+      const wrapper = function globalCaveFieldNativePathability(...args) {
+        if (isAlwaysPathableFieldTile(this)) return false;
+
+        const status = bot.cave?.status?.();
+        if (status?.config?.walkOverFields && isFireFieldTile(this)) {
+          return false;
+        }
+
+        return current.apply(this, args);
+      };
+
+      wrapper.__globalCaveFieldNativePathability = true;
+      wrapper.__globalCaveFieldNativePathabilityOriginal = current;
+
+      try {
+        Object.defineProperty(prototype, pathabilityName, {
+          value: wrapper,
+          writable: true,
+          configurable: true,
+        });
+      } catch (_) {
+        try { prototype[pathabilityName] = wrapper; } catch (_) {}
       }
     }
 
-    // The native pathfinder can use several collision predicates. Make field
-    // tiles passable to all of them before every native path request.
-    const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk", "isNotPathable"];
+    // Keep the existing walkability patches for CaveBot's other pathing
+    // checks. The critical native Pathfinder.search() check above is separate.
+    const predicates = [
+      "isWalkable", "isPassable", "isPathable",
+      "isBlocking", "blocksMovement", "canWalk"
+    ];
+
     for (const name of predicates) {
       if (typeof prototype[name] !== "function" || prototype[name].__globalCaveFieldWalkable) continue;
+
       const original = prototype[name];
       const wrapper = function globalCaveFieldPassability(...args) {
-        const status = bot.cave?.status?.();
-        if (isAlwaysWalkableFieldTile(this) ||
-            (status?.config?.walkOverFields && isFireFieldTile(this))) {
-          if (name === "isBlocking" || name === "blocksMovement" || name === "isNotPathable") return false;
+        if (isAlwaysPathableFieldTile(this) ||
+            (bot.cave?.status?.()?.config?.walkOverFields && isFireFieldTile(this))) {
+          if (name === "isBlocking" || name === "blocksMovement") return false;
           return true;
         }
         return original.apply(this, args);
       };
+
       wrapper.__globalCaveFieldWalkable = true;
-      wrapper.__globalCaveFieldOriginal = original;
-      prototype[name] = wrapper;
-      patched = true;
+      wrapper.__globalCaveFieldWalkableOriginal = original;
+
+      try {
+        Object.defineProperty(prototype, name, {
+          value: wrapper,
+          writable: true,
+          configurable: true,
+        });
+      } catch (_) {
+        try { prototype[name] = wrapper; } catch (_) {}
+      }
     }
-    return patched;
+
+    return true;
   }
 
   function patchAllLoadedTiles(bot, from = null, to = null) {
