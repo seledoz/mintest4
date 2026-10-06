@@ -231,15 +231,45 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
   }
 
   function patchPrototype(bot, from = null, to = null) {
-    const position = bot.getPlayerPosition?.();
-    if (!position) return false;
-
+    // We only need one real Tile instance to reach Tile.prototype.
+    // Do not scan loaded map tiles. Prefer an already-created pathfinder node,
+    // then the first tile of the first loaded chunk, then the player/from/to
+    // lookups as fallbacks. All Tile instances share this prototype.
+    const pathfinder = window.gameClient?.world?.pathfinder;
     let tile = null;
+
     try {
-      tile = window.gameClient?.world?.getTileFromWorldPosition?.(
-        new Position(Number(position.x), Number(position.y), Number(position.z))
-      );
+      const dirty = Array.isArray(pathfinder?.__dirtyNodes)
+        ? pathfinder.__dirtyNodes
+        : [];
+      tile = dirty.find((node) =>
+        node && typeof node.cleanPathfinding === "function"
+      ) || null;
     } catch (_) {}
+
+    if (!tile) {
+      try {
+        const chunks = window.gameClient?.world?.chunks || [];
+        const chunk = chunks.find((candidate) =>
+          Array.isArray(candidate?.tiles) && candidate.tiles.length
+        );
+        tile = chunk?.tiles?.[0] || null;
+      } catch (_) {}
+    }
+
+    const resolveTile = (value) => {
+      if (!value) return null;
+      try {
+        return window.gameClient?.world?.getTileFromWorldPosition?.(
+          new Position(Number(value.x), Number(value.y), Number(value.z))
+        ) || null;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    if (!tile) tile = resolveTile(from);
+    if (!tile) tile = resolveTile(to);
 
     const prototype = tile && Object.getPrototypeOf(tile);
     if (!prototype) return false;
