@@ -244,7 +244,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
     // The native pathfinder can use several collision predicates. Make field
     // tiles passable to all of them before every native path request.
-    const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"];
+    const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk", "isNotPathable"];
     let patched = false;
     for (const name of predicates) {
       if (typeof prototype[name] !== "function" || prototype[name].__globalCaveFieldWalkable) continue;
@@ -253,7 +253,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         const status = bot.cave?.status?.();
         if (isAlwaysWalkableFieldTile(this) ||
             (status?.config?.walkOverFields && isFireFieldTile(this))) {
-          if (name === "isBlocking" || name === "blocksMovement") return false;
+          if (name === "isBlocking" || name === "blocksMovement" || name === "isNotPathable") return false;
           return true;
         }
         return original.apply(this, args);
