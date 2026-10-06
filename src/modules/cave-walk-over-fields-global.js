@@ -230,7 +230,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return true;
   }
 
-  function patchPrototype(bot) {
+  function patchPrototype(bot, from = null, to = null) {
     const position = bot.getPlayerPosition?.();
     if (!position) return false;
     let tile = null;
@@ -247,14 +247,30 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     // Patch that prototype as well as the Tile prototype.
     let itemPrototype = null;
     try {
-      const items = Array.isArray(tile?.items) ? tile.items : [];
-      const fieldItem = items.find((item) => {
+      const candidates = [];
+      const addTileItems = (candidate) => {
+        if (Array.isArray(candidate?.items)) candidates.push(...candidate.items);
+      };
+      addTileItems(tile);
+      if (Array.isArray(tile?.neighbours)) tile.neighbours.forEach(addTileItems);
+      for (const candidate of [from, to]) {
+        if (!candidate) continue;
+        try {
+          const candidateTile = window.gameClient?.world?.getTileFromWorldPosition?.(
+            new Position(Number(candidate.x), Number(candidate.y), Number(candidate.z))
+          );
+          addTileItems(candidateTile);
+          if (Array.isArray(candidateTile?.neighbours)) candidateTile.neighbours.forEach(addTileItems);
+        } catch (_) {}
+      }
+      const fieldItem = candidates.find((item) => {
         const id = Number(item?.id ?? item?.itemId ?? item?.serverId ?? item?.clientId);
         return ALWAYS_WALKABLE_FIRE_FIELD_IDS.has(id) || ALWAYS_WALKABLE_POISON_FIELD_IDS.has(id) || FIRE_FIELD_IDS.has(id) || POISON_FIELD_IDS.has(id);
       });
       itemPrototype = fieldItem && Object.getPrototypeOf(fieldItem);
     } catch (_) {}
 
+    let patched = false;
     if (itemPrototype) {
       for (const name of ["isNotPathable", "isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk"]) {
         if (typeof itemPrototype[name] !== "function" || itemPrototype[name].__globalCaveFieldWalkable) continue;
@@ -272,14 +288,12 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
         wrapper.__globalCaveFieldWalkable = true;
         wrapper.__globalCaveFieldOriginal = original;
         try { itemPrototype[name] = wrapper; } catch (_) {}
-        patched = true;
       }
     }
 
     // The native pathfinder can use several collision predicates. Make field
     // tiles passable to all of them before every native path request.
     const predicates = ["isWalkable", "isPassable", "isPathable", "isBlocking", "blocksMovement", "canWalk", "isNotPathable"];
-    let patched = false;
     for (const name of predicates) {
       if (typeof prototype[name] !== "function" || prototype[name].__globalCaveFieldWalkable) continue;
       const original = prototype[name];
@@ -300,7 +314,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     return patched;
   }
 
-  function patchAllLoadedTiles(bot) {
+  function patchAllLoadedTiles(bot, from = null, to = null) {
     // Do not scan every loaded map tile here. Besides being unnecessary for
     // native pathfinding, that approach caused large FPS drops on big maps.
     // The previous implementation also called getTileThings(), which is not
@@ -310,7 +324,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     // tile prototype used by the native pathfinder. The native pathfinder can
     // then evaluate field tiles normally without a loaded-chunk scan.
     patchFieldDefinitions(bot);
-    patchPrototype(bot);
+    patchPrototype(bot, from, to);
   }
 
   function installPathfinderGuard(bot) {
@@ -325,7 +339,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       const status = bot.cave?.status?.();
       // Always refresh the unconditional 2123-2125 collision patch before
       // native pathfinding. Other field stages remain controlled by the toggle.
-      patchAllLoadedTiles(bot);
+      patchAllLoadedTiles(bot, args[0], args[1]);
       // Native pathfinder caches can retain a collision matrix created before
       // the unconditional 2123-2125 patches were installed. Invalidate the
       // native cache immediately before each CaveBot path request.
