@@ -274,6 +274,15 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     const prototype = tile && Object.getPrototypeOf(tile);
     if (!prototype) return false;
 
+    // Some clients expose Tile methods on the instance/prototype chain only
+    // after the world has initialized. Walk the chain until the native method
+    // is actually found; patching an intermediate empty prototype does nothing.
+    let methodOwner = prototype;
+    while (methodOwner && typeof methodOwner.isNotPathable !== "function") {
+      methodOwner = Object.getPrototypeOf(methodOwner);
+    }
+    if (!methodOwner) return false;
+
     // Native Pathfinder.search() explicitly rejects any intermediate tile for
     // which Tile.isNotPathable() is true. Fire stages 2123-2125 and poison
     // 2127 carry DatFlagNotPathable, even though CaveBot must treat them as
@@ -293,7 +302,7 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     };
 
     const pathabilityName = "isNotPathable";
-    const current = prototype[pathabilityName];
+    const current = methodOwner[pathabilityName];
     if (typeof current === "function" && !current.__globalCaveFieldNativePathability) {
       const wrapper = function globalCaveFieldNativePathability(...args) {
         if (isAlwaysPathableFieldTile(this)) return false;
@@ -310,13 +319,13 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       wrapper.__globalCaveFieldNativePathabilityOriginal = current;
 
       try {
-        Object.defineProperty(prototype, pathabilityName, {
+        Object.defineProperty(methodOwner, pathabilityName, {
           value: wrapper,
           writable: true,
           configurable: true,
         });
       } catch (_) {
-        try { prototype[pathabilityName] = wrapper; } catch (_) {}
+        try { methodOwner[pathabilityName] = wrapper; } catch (_) {}
       }
     }
 
@@ -328,9 +337,9 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
     ];
 
     for (const name of predicates) {
-      if (typeof prototype[name] !== "function" || prototype[name].__globalCaveFieldWalkable) continue;
+      if (typeof methodOwner[name] !== "function" || methodOwner[name].__globalCaveFieldWalkable) continue;
 
-      const original = prototype[name];
+      const original = methodOwner[name];
       const wrapper = function globalCaveFieldPassability(...args) {
         if (isAlwaysPathableFieldTile(this) ||
             (bot.cave?.status?.()?.config?.walkOverFields && isFireFieldTile(this))) {
@@ -344,13 +353,13 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
       wrapper.__globalCaveFieldWalkableOriginal = original;
 
       try {
-        Object.defineProperty(prototype, name, {
+        Object.defineProperty(methodOwner, name, {
           value: wrapper,
           writable: true,
           configurable: true,
         });
       } catch (_) {
-        try { prototype[name] = wrapper; } catch (_) {}
+        try { methodOwner[name] = wrapper; } catch (_) {}
       }
     }
 
