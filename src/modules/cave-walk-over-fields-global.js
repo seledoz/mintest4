@@ -259,9 +259,23 @@ window.__minibiaBotBundle = window.__minibiaBotBundle || {};
 
     const resolveTile = (value) => {
       if (!value) return null;
+
+      // Native Pathfinder.findPath/search passes actual Tile nodes. Use them
+      // directly; do not try to reconstruct a Position from Tile properties.
+      if (typeof value.isNotPathable === "function" ||
+          typeof value.cleanPathfinding === "function") {
+        return value;
+      }
+
       try {
+        const x = Number(value.x);
+        const y = Number(value.y);
+        const z = Number(value.z);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+          return null;
+        }
         return window.gameClient?.world?.getTileFromWorldPosition?.(
-          new Position(Number(value.x), Number(value.y), Number(value.z))
+          new Position(x, y, z)
         ) || null;
       } catch (_) {
         return null;
